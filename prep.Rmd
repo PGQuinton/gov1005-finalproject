@@ -16,6 +16,7 @@ knitr::opts_chunk$set(echo = FALSE)
 library(gifski)
 library(gganimate)
 library(fs)
+library(sf)
 library(tidyverse)
 ```
 
@@ -33,7 +34,7 @@ zillow_data_cities <- read.csv("data/Metro_Zhvi_SingleFamilyResidence.csv") %>%
 
 # Wrote the cleaned data in to the shiny app.
 
-write_csv(zillow_data_cities, "Draft App/cities.csv")
+write_csv(zillow_data_cities, "Final-Project/cities.csv")
 ```
 
 ```{r Oregon Median}
@@ -79,7 +80,7 @@ shapefile_or <- st_read("counties.shp") %>%
   mutate(month = as.POSIXct(paste(date,"-01",sep=""))) %>%
   mutate(month = format(month, "%m"))
 
-write_sf(shapefile_or, "Draft App/counties_map_or.shp")
+write_sf(shapefile_or, "Final-Project/counties_map_or.shp")
 ```
 
 ```{r Oregon Permits}
@@ -155,7 +156,7 @@ shapefile_or_permits <- st_read("counties.shp") %>%
 
 # Write shapefile over to the Shiny App
 
-write_sf(shapefile_or_permits, "Draft App/permits_map_or.shp")
+write_sf(shapefile_or_permits, "Final-Project/permits_map_or.shp")
 ```
 
 ```{r Oregon model}
@@ -175,7 +176,14 @@ zillowOR <- zillow_data_counties %>%
 # Now, each observation is its own row.
 # Mutated the date column to change it from character to datetime. Had to add a generic day (1) to each month to make that mutation.
 
-zillow_data_neighborhoods <- read_csv("data/Neighborhood_Zhvi_AllHomes.csv") %>%
+zillow_data_neighborhoods <- read_csv("data/Neighborhood_Zhvi_AllHomes.csv", col_types = cols(
+  .default = col_double(),
+  RegionName = col_character(),
+  City = col_character(),
+  State = col_character(),
+  Metro = col_character(),
+  CountyName = col_character()
+)) %>%
   filter(City == "Portland" & State == "OR") %>%
   distinct() %>%
   gather(date, median, 8:289) %>%
@@ -183,7 +191,7 @@ zillow_data_neighborhoods <- read_csv("data/Neighborhood_Zhvi_AllHomes.csv") %>%
 
 # Wrote the cleaned data to the shiny folder.
 
-write_csv(zillow_data_neighborhoods, "Draft App/neighborhoods.csv")
+write_csv(zillow_data_neighborhoods, "Final-Project/neighborhoods.csv")
 ```
 
 
@@ -206,7 +214,7 @@ animatedPlot <- zillow_data_neighborhoods %>%
          ) +
          transition_time(date)
 
-write_rds(animatedPlot, "Draft App/animated_map.rds")
+write_rds(animatedPlot, "Final-Project/animated_map.rds")
 ```
 
 
