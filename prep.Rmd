@@ -1,0 +1,213 @@
+---
+title: "Final Project - Prep"
+author: "Pieter Quinton"
+date: "12/3/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+```{r libraries}
+
+# Load in the libraries needed for data cleaning
+
+library(gifski)
+library(gganimate)
+library(fs)
+library(tidyverse)
+```
+
+```{r Nation}
+
+# Main data for the first tab in the shiny app.
+# Added rowname column to provide an inverse population ranked column.
+# Re-arranged the dataset so it would be in the order I want for the pickerInput in shiny.
+
+zillow_data_cities <- read.csv("data/Metro_Zhvi_SingleFamilyResidence.csv") %>%
+  filter(RegionName != "United States") %>%
+  arrange(desc(SizeRank)) %>%
+  add_rownames(var = "rowname") %>%
+  arrange(SizeRank)
+
+# Wrote the cleaned data in to the shiny app.
+
+write_csv(zillow_data_cities, "Draft App/cities.csv")
+```
+
+```{r Oregon Median}
+
+# Data from Zillow broken down by county rather than city
+# Filtered to just get data from the counties in the Portland Metro Area.
+# Some of those counties are in Washington state.
+
+zillow_data_counties <- read_csv("data/County_Zhvi_SingleFamilyResidence.csv", col_types = cols(
+  .default = col_double(),
+  RegionName = col_character(),
+  State = col_character(),
+  Metro = col_character(),
+  StateCodeFIPS = col_character(),
+  MunicipalCodeFIPS = col_character()
+))
+
+zillowCounty_OR <- zillow_data_counties %>%
+  filter(State == "OR") %>%
+  select(MunicipalCodeFIPS, `1996-04`:`2019-10`) 
+ 
+countiesMissing <- tibble(
+  MunicipalCodeFIPS = c("001",
+                        "021",
+                        "023",
+                        "037",
+                        "049",
+                        "055",
+                        "063",
+                        "069")
+)
+
+countyComplete <- zillowCounty_OR %>%
+  bind_rows(countiesMissing) %>%
+  mutate(COUNTY = MunicipalCodeFIPS)
+
+unzip("data/counties.zip")
+
+shapefile_or <- st_read("counties.shp") %>%
+  mutate(COUNTY = as.character(COUNTY)) %>%
+  merge(countyComplete, by = "COUNTY") %>%
+  gather(date, median, 37:319)  %>%
+  mutate(month = as.POSIXct(paste(date,"-01",sep=""))) %>%
+  mutate(month = format(month, "%m"))
+
+write_sf(shapefile_or, "Draft App/counties_map_or.shp")
+```
+
+```{r Oregon Permits}
+
+# Load in permits data
+
+permits <- read_csv("data/BuildingPermitsCountyMulti.csv", col_types = cols(
+  Location = col_character(),
+  Year = col_double(),
+  Series = col_character(),
+  `Series Code` = col_double(),
+  Month = col_double(),
+  Permits = col_double()
+)) 
+
+# Restrict permits data to just Oregon
+# Clean data
+
+oregonPermits <- permits %>%
+  select(-Month, -`Series Code`) %>%
+  group_by(Location, Year) %>%
+  summarize(total = sum(Permits)) %>%
+  spread(Year, total) %>%
+  select(-`<NA>`) %>%
+  arrange(Location) %>%
+  filter(Location != "Location") %>%
+  filter(Location != "Unspecified County in Oregon") %>%
+  ungroup(Location, Year) %>%
+  mutate(id = c("001",
+                "003",
+                "005",
+                "007",
+                "009",
+                "011",
+                "013",
+                "015",
+                "017",
+                "019",
+                "021",
+                "023",
+                "025",
+                "027",
+                "029",
+                "031",
+                "033",
+                "035",
+                "037",
+                "039",
+                "041",
+                "043",
+                "045",
+                "047",
+                "049",
+                "051",
+                "053",
+                "055",
+                "057",
+                "059",
+                "061",
+                "063",
+                "065",
+                "067",
+                "069",
+                "071")) %>%
+  select(-Location)
+
+# Connect permits data to the shapefile
+
+shapefile_or_permits <- st_read("counties.shp") %>%
+  mutate(id = as.character(COUNTY)) %>%
+  merge(oregonPermits, by = "id") %>%
+  gather(date, median, 37:55)
+
+# Write shapefile over to the Shiny App
+
+write_sf(shapefile_or_permits, "Draft App/permits_map_or.shp")
+```
+
+```{r Oregon model}
+
+zillowOR <- zillow_data_counties %>%
+  filter(State == "OR") %>%
+  select(-(`1996-04`:`2000-12`)) %>%
+  gather(date, median, 8:233)
+  
+```
+
+```{r Portland}
+
+# Data from Zillow broken down by neighborhood.
+# Filtered to just get neighborhoods in Portland, OR
+# Gathered the data to change it from wide data to long data.
+# Now, each observation is its own row.
+# Mutated the date column to change it from character to datetime. Had to add a generic day (1) to each month to make that mutation.
+
+zillow_data_neighborhoods <- read_csv("data/Neighborhood_Zhvi_AllHomes.csv") %>%
+  filter(City == "Portland" & State == "OR") %>%
+  distinct() %>%
+  gather(date, median, 8:289) %>%
+  mutate(date = as.POSIXct(paste(date,"-01",sep="")))
+
+# Wrote the cleaned data to the shiny folder.
+
+write_csv(zillow_data_neighborhoods, "Draft App/neighborhoods.csv")
+```
+
+
+```{r Portland animated}
+animatedPlot <- zillow_data_neighborhoods %>%
+       group_by(RegionName) %>%
+       ggplot(aes(x = date, y = median, group = RegionName, color = RegionName)) +
+         geom_point() +
+         theme(
+           legend.position = "none"
+         ) +
+         scale_y_continuous(lim = c(100000, 900000)) +
+         labs(title = "Changes in Median House Price over Time Subsetted by Neighborhoods in Portland, OR",
+              subtitle = "April, 1996 to August, 2019",
+              y = "Median House Price ($)",
+              x = "Date",
+              caption = "As the plot shows, house prices have generally been increasing. \nHowever, there was a decline following the bursting of the housing market bubble around 2008 with prices bottoming out around 2012. \nThis trend occurred across all neighborhoods. \nSource: Zillow") +
+         theme(
+          plot.caption = element_text(hjust = 0)
+         ) +
+         transition_time(date)
+
+write_rds(animatedPlot, "Draft App/animated_map.rds")
+```
+
+
+
