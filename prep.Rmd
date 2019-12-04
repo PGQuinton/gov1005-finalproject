@@ -29,8 +29,9 @@ library(tidyverse)
 zillow_data_cities <- read.csv("data/Metro_Zhvi_SingleFamilyResidence.csv") %>%
   filter(RegionName != "United States") %>%
   arrange(desc(SizeRank)) %>%
-  add_rownames(var = "rowname") %>%
-  arrange(SizeRank)
+  rownames_to_column(var = "rowname") %>%
+  arrange(SizeRank) %>%
+  select(-RegionID)
 
 # Wrote the cleaned data in to the shiny app.
 
@@ -78,7 +79,8 @@ shapefile_or <- st_read("counties.shp") %>%
   merge(countyComplete, by = "COUNTY") %>%
   gather(date, median, 37:319)  %>%
   mutate(month = as.POSIXct(paste(date,"-01",sep=""))) %>%
-  mutate(month = format(month, "%m"))
+  mutate(month = format(month, "%m")) %>%
+  select(date, month, median, geometry)
 
 write_sf(shapefile_or, "Final-Project/counties_map_or.shp")
 ```
@@ -152,7 +154,9 @@ oregonPermits <- permits %>%
 shapefile_or_permits <- st_read("counties.shp") %>%
   mutate(id = as.character(COUNTY)) %>%
   merge(oregonPermits, by = "id") %>%
-  gather(date, median, 37:55)
+  gather(date, median, 37:55) %>%
+  select(id, date, median, geometry) %>%
+  mutate(date = as.numeric(date))
 
 # Write shapefile over to the Shiny App
 
@@ -164,8 +168,18 @@ write_sf(shapefile_or_permits, "Final-Project/permits_map_or.shp")
 zillowOR <- zillow_data_counties %>%
   filter(State == "OR") %>%
   select(-(`1996-04`:`2000-12`)) %>%
-  gather(date, median, 8:233)
-  
+  gather(date, median, 8:233) %>%
+  mutate(year = as.POSIXct(paste(date,"-01",sep=""))) %>%
+  mutate(year = format(year, "%Y")) %>%
+  group_by(MunicipalCodeFIPS, year) %>%
+  summarize(avg = mean(median))
+
+write_csv(zillowOR, "Final-Project/zillow-or.csv")
+
+permitsOR <- shapefile_or_permits %>%
+  select(median, date)
+
+write_csv(permitsOR, "Final-Project/permits-or.csv")  
 ```
 
 ```{r Portland}
@@ -187,7 +201,8 @@ zillow_data_neighborhoods <- read_csv("data/Neighborhood_Zhvi_AllHomes.csv", col
   filter(City == "Portland" & State == "OR") %>%
   distinct() %>%
   gather(date, median, 8:289) %>%
-  mutate(date = as.POSIXct(paste(date,"-01",sep="")))
+  mutate(date = as.POSIXct(paste(date,"-01",sep=""))) %>%
+  select(RegionName, date, median)
 
 # Wrote the cleaned data to the shiny folder.
 
@@ -216,6 +231,4 @@ animatedPlot <- zillow_data_neighborhoods %>%
 
 write_rds(animatedPlot, "Final-Project/animated_map.rds")
 ```
-
-
 

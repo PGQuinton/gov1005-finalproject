@@ -17,6 +17,7 @@ options(scipen = 999)
 library(shiny)
 library(shinyWidgets)
 library(fs)
+library(sf)
 library(shinythemes)
 library(moderndive)
 library(gt)
@@ -24,6 +25,7 @@ library(tidymodels)
 library(broom)
 library(gifski)
 library(gganimate)
+library(png)
 library(ggthemes)
 library(tidyverse)
 
@@ -45,11 +47,15 @@ neighborhoodsVector <- as.vector(neighborhoods$RegionName)
 
 # Oregon county level median single-family home price data
 
-countiesOregon_map <- st_read("counties_map_or.shp")
+# countiesOregon_map <- st_read("counties_map_or.shp")
 
 # Mapped permits data for Oregon
 
-permitsOregon_map <- st_read("permits_map_or.shp")
+# permitsOregon_map <- st_read("permits_map_or.shp")
+
+zillowOR_county <- read_csv("zillow-or.csv")
+
+permitsOR_county <- read_csv("permits-or.csv")
 
 # Define UI for application.
 # Set theme 
@@ -103,36 +109,14 @@ ui <- navbarPage("United States Housing Market", theme = shinytheme("sandstone")
                           tabsetPanel(
                             id = "tabsOregon",
                             tabPanel("Home Value",
-                                     sidebarLayout(
-                                       sidebarPanel(
-                                         selectInput("month",
-                                                     "Month",
-                                                     choices = 1:12,
-                                                     multiple = FALSE,
-                                                     selected = 10),
-                                         selectInput("year",
-                                                     "Year",
-                                                     choices = 1996:2019,
-                                                     multiple = FALSE,
-                                                     selected = 2019)
+                                     plotOutput("plot4")
                                        ),
-                                       mainPanel(
-                                         plotOutput("plotMap")
-                                       )
-                                     )
-                            ),
+                                     
+                          
                             tabPanel("Building Permits",
-                                     sidebarLayout(
-                                       sidebarPanel(
-                                         selectInput("year2",
-                                                     "Year",
-                                                     choices = 1996:2019,
-                                                     multiple = FALSE,
-                                                     selected = 2019)
-                                       ),
-                                       mainPanel(
-                                         plotOutput("plotMap2"))
-                                     ))
+                                     
+                                         plotOutput("plot3"))
+                                     
                             
                           )
                  ),
@@ -146,7 +130,7 @@ ui <- navbarPage("United States Housing Market", theme = shinytheme("sandstone")
                             id = "tabsPortland",
                             tabPanel(
                               "Animation",
-                              plotOutput("animation")
+                               plotOutput("animation")
                             ),
                             tabPanel(
                               "Plot",
@@ -203,7 +187,7 @@ server <- function(input, output) {
     plot1 <- cities %>%
       filter(RegionName %in% input$selectCities) %>%
       ggplot(aes(x=SizeRank, y=X2019.08)) +
-      geom_jitter(alpha = 0.75) +
+      geom_point(alpha = 0.75) +
       scale_y_log10(lim = c(50000, 1000000)) + 
       scale_x_reverse(lim =  c(805, 0)) +
       geom_smooth(method = "lm", se = FALSE) +
@@ -261,45 +245,41 @@ server <- function(input, output) {
     }
   })
   
-  output$plotMap <- renderPlot({
-    
-    countiesOregon_map <- countiesOregon_map %>%
-      filter(str_detect(date, as.character(input$year))) %>%
-      filter(str_detect(as.character(month), as.character(input$month)))
-    
-    ggplot(data = countiesOregon_map) +
-      geom_sf(aes(fill = median)) +
-      theme_map() +
-      labs(
-        title = "Median Single-Family House Price in Oregon Counties Each Month",
-        subtitle = "Higher home prices are concentrated in suburban and urban areas.",
-        fill = "Median Single-Family House Price ($)",
-        caption = "Data Sources: US Census Bureau, Department of Housing and Urban Development, & Zillow"
-      ) +
+  output$plot4 <- renderPlot ({
+    plot4 <- zillowOR_county %>%
+      group_by(MunicipalCodeFIPS) %>%
+      ggplot(aes(x = year, y = avg)) +
+      geom_point() +
+      scale_y_log10(lim = c(50000, 1000000)) + 
+      geom_smooth(method = "lm", se = FALSE) +
+      labs(title = "Change in Median House Price over Time by County",
+           subtitle = "Data from 2001 to 2019 limited to just the state of Oregon.",
+           y = "Median House Price ($)",
+           x = "Year",
+           caption = "The scale on the y-axis has been logged so as to better illustrate the relationship between the two variables. \nSource: Zillow") +
       theme(
-        legend.position = "right"
+        plot.caption = element_text(hjust = 0)
       )
+    plot4
   })
   
-  output$plotMap2 <- renderPlot ({
-    permitsOregon_map <- permitsOregon_map %>%
-      filter(str_detect(date, as.character(input$year2)))
-    
-    ggplot(data = permitsOregon_map) +
-      geom_sf(aes(fill = median)) +
-      theme_map() +
-      labs(
-        title = "Total Number of Multi-Unit Housing Structure Permits Issued Each Year",
-        subtitle = "Higher numbers of permits issued in more densely populated counties.",
-        fill = "Permits",
-        caption = "Data Sources: US Census Bureau, Department of Housing and Urban Development, & Zillow"
-      ) +
-      theme(
-        legend.position = "right"
-      )
+  output$plot3 <- renderPlot ({
+    plot3 <- permitsOR_county %>%
+      ggplot(aes(x = date, y = median)) + 
+        geom_point() +
+        geom_smooth(method = "lm", se = FALSE) +
+        labs(title = "Change in Number of Multi-Unit Housing Permits Issued Each Year by County",
+           subtitle = "Data from 2001 to 2019 limited to just the state of Oregon.",
+           y = "Number of Permits Issued",
+           x = "Year",
+           caption = "Data Sources: US Census Bureau, Department of Housing and Urban Development, & Zillow") +
+        theme(
+          plot.caption = element_text(hjust = 0)
+        )
+    plot3
   })
   
-  output$animation <- renderImage({
+   output$animation <- renderImage({
     animation <- read_rds("animated_map.rds")
     
     anim_save("animation.gif", animation)
