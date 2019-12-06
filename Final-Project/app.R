@@ -91,10 +91,14 @@ ui <- navbarPage("United States Housing Market", theme = shinytheme("sandstone")
                             mainPanel(
                               tabsetPanel(id = "tabsMain",
                                           tabPanel("Plot",
-                                                   plotOutput("plot1")
+                                                   plotOutput("plot1"),
+                                                   br(),
+                                                   p(paste("The above plot displays the relationship between population and median single-family house price for the 804 most populous cities in the United States. The X-axis displays the ranked population of the city with the most populous city on the right and the least on the left. The Y-axis displays the median single-family house price. The data is a courtesy of Zillow and is from August 2019. The picker input on the left sidebar allows you to select the cities which you want to display on the plot. As the plot of the entire dataset illustrates, there is a positive relationship between population and median house price, more populous cities are more likely to have higher median house prices than less populous cities."))
                                           ),
                                           tabPanel("Model",
-                                                   gt_output("model")
+                                                   gt_output("model"),
+                                                   br(),
+                                                   p(paste("The above model represents the regression output from the plot displayed in the plot tab. The table values are calculated based on the current selection of cities which can be changed via the picker input. The coefficient for population represents the expected increase in median single-family house price relative to the intercept for each increase in population ranking. The upper and lower bounds of the confidence interval indicate the statisticall significance of the relationship. Looking at the calculations for the entire list of cities, there is a positive relationship between population and median house price that is statistically significant at the 10% level."))
                                           )
                               )
                             )
@@ -227,6 +231,10 @@ server <- function(input, output) {
           estimate = "Coefficient",
           conf.low = "5th percentile",
           conf.high = "95th percentile"
+        ) %>%
+        tab_spanner(
+          label = "Confidence Interval",
+          columns = 3:4
         ) %>%
         fmt_number(
           columns = 2:4,
