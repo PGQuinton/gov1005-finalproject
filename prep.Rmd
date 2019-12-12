@@ -2,11 +2,13 @@
 title: "Final Project - Prep"
 author: "Pieter Quinton"
 date: "12/3/2019"
-output: html_document
+output:
+  pdf_document: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(echo = FALSE, results = 'asis')
 ```
 
 ```{r libraries}
@@ -17,7 +19,9 @@ library(gifski)
 library(gganimate)
 library(fs)
 library(sf)
+library(janitor)
 library(tidyverse)
+library(stargazer)
 ```
 
 ```{r Nation}
@@ -27,143 +31,36 @@ library(tidyverse)
 # Re-arranged the dataset so it would be in the order I want for the pickerInput in shiny.
 
 zillow_data_cities <- read.csv("data/Metro_Zhvi_SingleFamilyResidence.csv") %>%
-  filter(RegionName != "United States") %>%
-  arrange(desc(SizeRank)) %>%
+  clean_names() %>%
+  filter(region_name != "United States") %>%
+  arrange(desc(size_rank)) %>%
   rownames_to_column(var = "rowname") %>%
-  arrange(SizeRank) %>%
-  select(-RegionID)
+  arrange(size_rank) %>%
+  select(rowname, region_name, size_rank, x2019_08) %>%
+  gather(date, price, 4) %>%
+  mutate(date = str_remove(date, "x")) %>%
+  mutate(date = str_replace(date, "_", "-")) %>%
+  mutate(Rank = size_rank,
+         Price = price)
 
 # Wrote the cleaned data in to the shiny app.
 
 write_csv(zillow_data_cities, "Final-Project/cities.csv")
 ```
 
-```{r Oregon Median}
-
-# Data from Zillow broken down by county rather than city
-# Filtered to just get data from the counties in the Portland Metro Area.
-# Some of those counties are in Washington state.
-
-zillow_data_counties <- read_csv("data/County_Zhvi_SingleFamilyResidence.csv", col_types = cols(
-  .default = col_double(),
-  RegionName = col_character(),
-  State = col_character(),
-  Metro = col_character(),
-  StateCodeFIPS = col_character(),
-  MunicipalCodeFIPS = col_character()
-))
-
-zillowCounty_OR <- zillow_data_counties %>%
-  filter(State == "OR") %>%
-  select(MunicipalCodeFIPS, `1996-04`:`2019-10`) 
- 
-countiesMissing <- tibble(
-  MunicipalCodeFIPS = c("001",
-                        "021",
-                        "023",
-                        "037",
-                        "049",
-                        "055",
-                        "063",
-                        "069")
-)
-
-countyComplete <- zillowCounty_OR %>%
-  bind_rows(countiesMissing) %>%
-  mutate(COUNTY = MunicipalCodeFIPS)
-
-unzip("data/counties.zip")
-
-shapefile_or <- st_read("counties.shp") %>%
-  mutate(COUNTY = as.character(COUNTY)) %>%
-  merge(countyComplete, by = "COUNTY") %>%
-  gather(date, median, 37:319)  %>%
-  mutate(month = as.POSIXct(paste(date,"-01",sep=""))) %>%
-  mutate(month = format(month, "%m")) %>%
-  select(date, month, median, geometry)
-
-write_sf(shapefile_or, "Final-Project/counties_map_or.shp")
-```
-
-```{r Oregon Permits}
-
-# Load in permits data
-
-permits <- read_csv("data/BuildingPermitsCountyMulti.csv", col_types = cols(
-  Location = col_character(),
-  Year = col_double(),
-  Series = col_character(),
-  `Series Code` = col_double(),
-  Month = col_double(),
-  Permits = col_double()
-)) 
-
-# Restrict permits data to just Oregon
-# Clean data
-
-oregonPermits <- permits %>%
-  select(-Month, -`Series Code`) %>%
-  group_by(Location, Year) %>%
-  summarize(total = sum(Permits)) %>%
-  spread(Year, total) %>%
-  select(-`<NA>`) %>%
-  arrange(Location) %>%
-  filter(Location != "Location") %>%
-  filter(Location != "Unspecified County in Oregon") %>%
-  ungroup(Location, Year) %>%
-  mutate(id = c("001",
-                "003",
-                "005",
-                "007",
-                "009",
-                "011",
-                "013",
-                "015",
-                "017",
-                "019",
-                "021",
-                "023",
-                "025",
-                "027",
-                "029",
-                "031",
-                "033",
-                "035",
-                "037",
-                "039",
-                "041",
-                "043",
-                "045",
-                "047",
-                "049",
-                "051",
-                "053",
-                "055",
-                "057",
-                "059",
-                "061",
-                "063",
-                "065",
-                "067",
-                "069",
-                "071")) %>%
-  select(-Location)
-
-# Connect permits data to the shapefile
-
-shapefile_or_permits <- st_read("counties.shp") %>%
-  mutate(id = as.character(COUNTY)) %>%
-  merge(oregonPermits, by = "id") %>%
-  gather(date, median, 37:55) %>%
-  select(id, date, median, geometry) %>%
-  mutate(date = as.numeric(date))
-
-# Write shapefile over to the Shiny App
-
-write_sf(shapefile_or_permits, "Final-Project/permits_map_or.shp")
-```
-
 ```{r Oregon model}
+
+# median home price data
+
+zillow_data_counties <- read_csv("data/County_Zhvi_SingleFamilyResidence.csv",
+                                 col_types = cols(
+                                 .default = col_double(),
+                                 RegionName = col_character(),
+                                 State = col_character(),
+                                 Metro = col_character(),
+                                 StateCodeFIPS = col_character(),
+                                 MunicipalCodeFIPS = col_character()
+                                ))
 
 zillowOR <- zillow_data_counties %>%
   filter(State == "OR") %>%
@@ -172,14 +69,96 @@ zillowOR <- zillow_data_counties %>%
   mutate(year = as.POSIXct(paste(date,"-01",sep=""))) %>%
   mutate(year = format(year, "%Y")) %>%
   group_by(MunicipalCodeFIPS, year) %>%
-  summarize(avg = mean(median))
+  summarize(avg = mean(median)) %>%
+  ungroup(MunicipalCodeFIPS, year) %>%
+  group_by(MunicipalCodeFIPS) %>%
+  arrange(year) %>%
+  mutate(diff = avg - lag(avg, default = first(avg))) %>%
+  mutate(id = MunicipalCodeFIPS) %>%
+  ungroup(MunicipalCodeFIPS) %>%
+  select(id, year, avg, diff) %>%
+  filter(id %in% c("005", "009", "051", "067", "071"))
 
-write_csv(zillowOR, "Final-Project/zillow-or.csv")
+# Permits data set
 
-permitsOR <- shapefile_or_permits %>%
-  select(median, date)
+permitsMetro <- read_csv("data/BuildingPermitsPortlandMetro.csv", 
+                         col_types = cols(
+                         Location = col_character(),
+                         Year = col_double(),
+                         Series = col_character(),
+                         `Series Code` = col_double(),
+                         Month = col_double(),
+                         Permits = col_double()
+                        )) %>%
+  select(-Month, -`Series Code`) %>%
+  group_by(Location, Year) %>%
+  summarize(total = sum(Permits)) %>%
+  spread(Year, total) %>%
+  arrange(Location) %>%
+  ungroup(Location, Year) %>%
+  gather(year, total, 2:20) %>%
+  mutate(name = paste(Location, "Oregon", sep = ", ")) %>%
+  select(-Location)
 
-write_csv(permitsOR, "Final-Project/permits-or.csv")  
+# Population data
+# 2010-2018
+
+oregon_county_pop <- read_csv("data/oregon_county_pop.csv", col_types = cols(
+  GEO.id = col_character(),
+  GEO.id2 = col_double(),
+  `GEO.display-label` = col_character(),
+  rescen42010 = col_double(),
+  resbase42010 = col_double(),
+  respop72010 = col_double(),
+  respop72011 = col_double(),
+  respop72012 = col_double(),
+  respop72013 = col_double(),
+  respop72014 = col_double(),
+  respop72015 = col_double(),
+  respop72016 = col_double(),
+  respop72017 = col_double(),
+  respop72018 = col_double()
+)) %>%
+  select(-GEO.id, -rescen42010, -resbase42010) 
+
+# Rename columns
+
+names(oregon_county_pop) <- c("id", "name", "2010", "2011", "2012", "2013", "2014", "2015", "2016", "2017", "2018")
+
+# 2000 - 2009
+
+oregon_county_pop_2000 <- read_csv("data/counties_2000_2009.csv", col_types = cols(
+  .default = col_double(),
+  STNAME = col_character(),
+  CTYNAME = col_character()
+)) %>%
+  clean_names() %>%
+  filter(stname == "Oregon" & str_detect(ctyname, "County")) %>%
+  mutate(name = paste(ctyname, "Oregon", sep = ", ")) %>%
+  select(-ctyname, -sumlev, -region, -division, -state, -county, -stname, -estimatesbase2000, -census2010pop, -popestimate2010)
+
+# Rename columns
+
+names(oregon_county_pop_2000) <- c("2000", "2001", "2002", "2003", "2004", "2005", "2006", "2007", "2008", "2009", "name")
+
+# Merge population datasets
+
+oregon_county_pop <- oregon_county_pop %>%
+  merge(oregon_county_pop_2000, by = "name")
+
+# For some reason it wasn't working to have it all as one piped function so I separated them out
+
+oregon_county_pop <- oregon_county_pop %>%
+  gather(year, pop, 3:21)
+
+counties <- oregon_county_pop %>%
+  mutate(id = str_remove(as.character(id), "41")) %>%
+  filter(id %in% c("005", "009", "051", "067", "071")) %>%
+  merge(permitsMetro, by = c("name", "year")) %>%
+  merge(zillowOR, by = c("id", "year")) %>%
+  arrange(year)
+
+write_csv(counties, "Final-Project/counties.csv")  
 ```
 
 ```{r Portland}

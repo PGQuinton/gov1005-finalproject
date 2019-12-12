@@ -21,6 +21,7 @@ library(sf)
 library(shinythemes)
 library(moderndive)
 library(gt)
+library(plotly)
 library(tidymodels)
 library(broom)
 library(gifski)
@@ -31,31 +32,51 @@ library(tidyverse)
 
 # Read in the Zillow cities data.
 
-cities <- read_csv("cities.csv")
+cities <- read_csv("cities.csv", 
+                   col_types = cols(
+                     rowname = col_double(),
+                     region_name = col_character(),
+                     size_rank = col_double(),
+                     date = col_character(),
+                     price = col_double(),
+                     Rank = col_double(),
+                     Price = col_double()
+                   ))
 
 # Created a vector of the city names that will be used in the pickerInput.
 
-citiesVector <- as.vector(cities$RegionName)
+citiesVector <- as.vector(cities$region_name)
 
 # Read in the Zillow neighborhood data.
 
-neighborhoods <- read_csv("neighborhoods.csv")
+neighborhoods <- read_csv("neighborhoods.csv",
+                          col_types = cols(
+                            RegionName = col_character(),
+                            date = col_datetime(format = ""),
+                            median = col_double()
+                          ))
 
 # Created a vector of neighborhood names that will be used in the pickerInput.
 
-neighborhoodsVector <- as.vector(neighborhoods$RegionName)
+neighborhoodsVector <- neighborhoods %>%
+  distinct(RegionName)
+
+neighborhoodsVector <- as.vector(neighborhoodsVector$RegionName)
 
 # Oregon county level median single-family home price data
 
-# countiesOregon_map <- st_read("counties_map_or.shp")
-
 # Mapped permits data for Oregon
 
-# permitsOregon_map <- st_read("permits_map_or.shp")
-
-zillowOR_county <- read_csv("zillow-or.csv")
-
-permitsOR_county <- read_csv("permits-or.csv")
+counties_data <- read_csv("counties.csv",
+                          col_types = cols(
+                            id = col_character(),
+                            year = col_double(),
+                            name = col_character(),
+                            pop = col_double(),
+                            total = col_double(),
+                            avg = col_double(),
+                            diff = col_double()
+                          ))
 
 # Define UI for application.
 # Set theme 
@@ -91,11 +112,13 @@ ui <- navbarPage("United States Housing Market", theme = shinytheme("sandstone")
                             mainPanel(
                               tabsetPanel(id = "tabsMain",
                                           tabPanel("Plot",
-                                                   plotOutput("plot1"),
+                                                   plotlyOutput("plot1"),
                                                    br(),
                                                    p(paste("The above plot displays the relationship between population and median single-family house price for the 804 most populous cities in the United States. The X-axis displays the ranked population of the city with the most populous city on the right and the least on the left. The Y-axis displays the median single-family house price. The data is a courtesy of Zillow and is from August 2019. The picker input on the left sidebar allows you to select the cities which you want to display on the plot. As the plot of the entire dataset illustrates, there is a positive relationship between population and median house price, more populous cities are more likely to have higher median house prices than less populous cities."))
                                           ),
                                           tabPanel("Model",
+                                                   p(paste("Select at least 3 cities to view regression outputs.")),
+                                                   br(),
                                                    gt_output("model"),
                                                    br(),
                                                    p(paste("The above model represents the regression output from the plot displayed in the plot tab. The table values are calculated based on the current selection of cities which can be changed via the picker input. The coefficient for population represents the expected increase in median single-family house price relative to the intercept for each increase in population ranking. The upper and lower bounds of the confidence interval indicate the statisticall significance of the relationship. Looking at the calculations for the entire list of cities, there is a positive relationship between population and median house price that is statistically significant at the 10% level."))
@@ -108,34 +131,47 @@ ui <- navbarPage("United States Housing Market", theme = shinytheme("sandstone")
                  # Second tab
                  # Oregon state level data
                  
-                 tabPanel("Oregon",
-                          titlePanel("State Level Data"),
+                 tabPanel("Counties",
+                          titlePanel("County Level Data - Portland, Oregon"),
                           tabsetPanel(
                             id = "tabsOregon",
                             tabPanel("Home Value",
-                                     plotOutput("plot4")
+                                     plotOutput("plot4"),
+                                     br(),
+                                     p(paste("The above plot illustrates the changes in median single-family home price over from 2001 to 2019. The data is from the six counties in Oregon that make-up the metropolitan area of Portland. Portland metro also includes two counties in Washington but for the purposes of this analysis, those were excluded. The plot shows that across all six counties, home prices have generally risen over the past 18 years. As is well documented at this point, the home prices began to decline following the housing market crash and subsequent recession. Home prices bottomed out in roughly 2012 before beginning to rise again. This trend is consistent for all the counties included."))
                                        ),
-                                     
-                          
                             tabPanel("Building Permits",
-                                     
-                                         plotOutput("plot3"))
-                                     
-                            
+                                     plotOutput("plot3"),
+                                     br(),
+                                     p(paste("The above plot illustrates the relationship between building permits and population at the county level between 2001 and 2019. The X axis displays the year while the Y axis displays the number of building permits for housing structures issued that year. The size of the points on the plot represents the population of the county for that year. The five counties included in the analysis are the five counties in Oregon that make-up the metropolitan area of Portland. There are two main takeaways from the plot. The first is that, as seen in the median house prices, building permit rates sharply declined following the housing market crash in 2008 and took several years to rebound. This decline was more pronounced in the more populated counties. The second main takeaway is that the more populated counties have a higher number of building permits issued each year which is rather intuitive but still important to understand."))
+                                     ),
+                            tabPanel("Model",
+                                     uiOutput("lm1"),
+                                     br(),
+                                     p(paste("The regression output displayed captures a linear regression testing the effects of population and building permit numbers on the annual change in median housing price at the county level. The regression controls for year and county effects. Year effects effectively just capture an estimation of inflation in housing prices. The regression results show that the number of housing permits issued each year is statistically significant at the 1% level and the year is statistically significant at the 5% level. The coefficient on permits was 12.668 indicating that for every one housing permit issued, median prices can be expected to rise by $12.668. The coefficient on year was much higher at 1,331.030 indicating that each year prices can be expected to rise by $1,331.030. Population was not statistically significant. None of the counties were statistically significant. Clackamas County was not listed on the regression output because it is the base category so the other county coefficients are all relatively to Clackamas County."))
+                            )
                           )
                  ),
                  
                  # Third tab
                  # Titled Portland, OR
                  
-                 tabPanel("Portland",
+                 tabPanel("Neighborhoods",
                           titlePanel("Neighborhood Trends Over Time in Portland, Oregon"),
                           tabsetPanel(
                             id = "tabsPortland",
                             tabPanel(
                               "Animation",
-                               plotOutput("animation")
-                            ),
+                               sidebarLayout(
+                                 sidebarPanel(
+                                   p(paste("The plot to the right displays an animation of the changing median house prices at the neighborhood level from 1996 to 2019. The neighborhoods included make up the Portland metropolitan area. As with the county level data, the neighborhood data shows a dip in median house price following the 2008 crash. This dip appears to affect all neighborhoods somewhat equally."))
+                                 ),
+                                 mainPanel(
+                                   p(paste("Disclaimer: This animation takes a few seconds to load.")),
+                                   br(),
+                                   plotOutput("animation")
+                                 )
+                            )),
                             tabPanel(
                               "Plot",
                               sidebarLayout(
@@ -145,10 +181,12 @@ ui <- navbarPage("United States Housing Market", theme = shinytheme("sandstone")
                                               choices = neighborhoodsVector,
                                               options = list("actions-box" = TRUE),
                                               multiple = TRUE,
-                                              selected = neighborhoodsVector[952]
+                                              selected = neighborhoodsVector[39]
                                   )),
                                 mainPanel(
-                                  plotOutput("plot2")
+                                  plotOutput("plot2"),
+                                  br(),
+                                  p(paste("The above plot is the same as the animated plot but a static version. The year is on the Y-axis and the median house price is on the X-axis. Neighborhoods can be selected to include in the plot from the dropdown menu on the left. I set the initial plot to just include the neighborhood in which I grew up, Irvington. The general trend across all neighborhoods is a steady increase in median house price with a depression for several years following the crash in 2008. Neighborhood prices have rebounded strongly and have made up for the several year decline."))
                                 )
                               )
                             )
@@ -186,11 +224,11 @@ server <- function(input, output) {
   # Simple ggplot.
   # Subset the data to just include the cities selected in the pickerInput using a filter funciton.
   
-  output$plot1 <- renderPlot({
+  output$plot1 <- renderPlotly({
     
     plot1 <- cities %>%
-      filter(RegionName %in% input$selectCities) %>%
-      ggplot(aes(x=SizeRank, y=X2019.08)) +
+      filter(region_name %in% input$selectCities) %>%
+      ggplot(aes(x=Rank, y=Price)) +
       geom_point(alpha = 0.75) +
       scale_y_log10(lim = c(50000, 1000000)) + 
       scale_x_reverse(lim =  c(805, 0)) +
@@ -203,7 +241,7 @@ server <- function(input, output) {
       theme(
         plot.caption = element_text(hjust = 0)
       )
-    plot1
+    ggplotly(plot1)
     
   })
   
@@ -211,18 +249,19 @@ server <- function(input, output) {
   # Used render_gt() so my gt table shows up.
   # Again, subset the data to just include the cities selected.
   
+  
+    
   output$model <- render_gt({
-    
-    model_data <- cities %>%
-      filter(RegionName %in% input$selectCities)
-    
-    
-    
-    if(nrow(model_data) > 2){
       
-      model <- tidy(lm(X2019.08 ~ rowname, data = model_data), conf.int = TRUE, conf.level = .90)
       
-      model %>%
+     
+    if(length(input$selectCities) > 2){
+      model_data <- cities %>%
+        filter(region_name %in% input$selectCities)
+      
+      model <- tidy(lm(price ~ rowname, data = model_data), conf.int = TRUE, conf.level = .90)
+      
+      gt <- model %>%
         select(term, estimate, conf.low, conf.high) %>%
         mutate(term = c("Intercept", "Population Ranked")) %>%
         gt() %>%
@@ -248,22 +287,26 @@ server <- function(input, output) {
           source_note = "Data from Zillow."
         )
       
-    } else{
-      HTML("Select at least 3 cities from the drop-down menu on the left.")
+      gt
+    } else {
+      
     }
-  })
+      
+    })
+
+  
   
   output$plot4 <- renderPlot ({
-    plot4 <- zillowOR_county %>%
-      group_by(MunicipalCodeFIPS) %>%
+    plot4 <- counties_data %>%
       ggplot(aes(x = year, y = avg)) +
-      geom_point() +
+      geom_point(aes(color = name), alpha = 0.9) +
       scale_y_log10(lim = c(50000, 1000000)) + 
       geom_smooth(method = "lm", se = FALSE) +
       labs(title = "Change in Median House Price over Time by County",
-           subtitle = "Data from 2001 to 2019 limited to just the state of Oregon.",
+           subtitle = "Data from 2001 to 2019 limited to just the counties within the metropolitan area of Portland, Oregon.",
            y = "Median House Price ($)",
            x = "Year",
+           color = "County",
            caption = "The scale on the y-axis has been logged so as to better illustrate the relationship between the two variables. \nSource: Zillow") +
       theme(
         plot.caption = element_text(hjust = 0)
@@ -272,15 +315,18 @@ server <- function(input, output) {
   })
   
   output$plot3 <- renderPlot ({
-    plot3 <- permitsOR_county %>%
-      ggplot(aes(x = date, y = median)) + 
-        geom_point() +
-        geom_smooth(method = "lm", se = FALSE) +
-        labs(title = "Change in Number of Multi-Unit Housing Permits Issued Each Year by County",
-           subtitle = "Data from 2001 to 2019 limited to just the state of Oregon.",
+    plot3 <- counties_data %>%
+      ggplot(aes(x = year, y = total, color = name)) + 
+        geom_point(aes(size = pop)) +
+        geom_line() +
+        labs(title = "Change in Number of Housing Permits Issued Each Year by County",
+           subtitle = "Data from 2001 to 2019 limited to just the counties within the metropolitan area of Portland, Oregon.",
            y = "Number of Permits Issued",
            x = "Year",
-           caption = "Data Sources: US Census Bureau, Department of Housing and Urban Development, & Zillow") +
+           caption = "Data Sources: US Census Bureau, Department of Housing and Urban Development, & Zillow",
+           color = "County",
+           size = "Population"
+           ) +
         theme(
           plot.caption = element_text(hjust = 0)
         )
@@ -319,6 +365,33 @@ server <- function(input, output) {
         plot.caption = element_text(hjust = 0)
       )
   })
+  
+  output$plot5 <- renderPlot ({
+    permitsOR_county %>%
+      filter(year == 2010) %>%
+      ggplot(aes(x = median, y = diff)) +
+        geom_point() +
+        geom_smooth(method = "lm")
+  })
+  
+  output$lm1 <- renderUI({
+    reg_permits1 <- lm(diff ~ total + pop + year + name, data = counties_data)
+    
+    reg <- stargazer(reg_permits1,
+                     title = "OLS Regression: Determinants of Changing House Prices",
+                     type = "html",
+                     covariate.labels = c(
+                       "Permits",
+                       "Population",
+                       "Year",
+                       "Columbia County",
+                       "Multnomah County",
+                       "Washington County",
+                       "Yamhill County"
+                     ))
+    
+    HTML(reg)
+    })
 }
 
 # Run the application 
