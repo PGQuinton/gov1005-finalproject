@@ -28,9 +28,10 @@ library(gifski)
 library(gganimate)
 library(png)
 library(ggthemes)
+library(stargazer)
 library(tidyverse)
 
-# Read in the Zillow cities data.
+# Read in the cities data.
 
 cities <- read_csv("cities.csv", 
                    col_types = cols(
@@ -47,7 +48,7 @@ cities <- read_csv("cities.csv",
 
 citiesVector <- as.vector(cities$region_name)
 
-# Read in the Zillow neighborhood data.
+# Read in the neighborhood data.
 
 neighborhoods <- read_csv("neighborhoods.csv",
                           col_types = cols(
@@ -57,15 +58,15 @@ neighborhoods <- read_csv("neighborhoods.csv",
                           ))
 
 # Created a vector of neighborhood names that will be used in the pickerInput.
+# Because the data is long there are multiple observations for each neighborhood.
+# So to create the vector, I needed just the distinct neighborhood names.
 
 neighborhoodsVector <- neighborhoods %>%
   distinct(RegionName)
 
 neighborhoodsVector <- as.vector(neighborhoodsVector$RegionName)
 
-# Oregon county level median single-family home price data
-
-# Mapped permits data for Oregon
+# Read in county level data which includes median price, permits, and population.
 
 counties_data <- read_csv("counties.csv",
                           col_types = cols(
@@ -129,7 +130,8 @@ ui <- navbarPage("United States Housing Market", theme = shinytheme("sandstone")
                  ),
                  
                  # Second tab
-                 # Oregon state level data
+                 # County level data
+                 # Three tabs. One for the price plot, one for the permit plot, and one for the regression output.
                  
                  tabPanel("Counties",
                           titlePanel("County Level Data - Portland, Oregon"),
@@ -154,7 +156,8 @@ ui <- navbarPage("United States Housing Market", theme = shinytheme("sandstone")
                  ),
                  
                  # Third tab
-                 # Titled Portland, OR
+                 # Titled Neighborhoods.
+                 # Two tabs. The animated plot and the interactive static plot.
                  
                  tabPanel("Neighborhoods",
                           titlePanel("Neighborhood Trends Over Time in Portland, Oregon"),
@@ -208,7 +211,7 @@ ui <- navbarPage("United States Housing Market", theme = shinytheme("sandstone")
                           
                           br(),
                           
-                          p(paste("I, Pieter Quinton, am a senior at Harvard College studying Government with a secondary focus in Economics. You can access the source code for the project at https://github.com/PGQuinton/gov1005-final-project.")),
+                          p(paste("I, Pieter Quinton, am a senior at Harvard College studying Government with a secondary focus in Economics. You can access the source code for the project at my"), a(href = "https://github.com/PGQuinton/gov1005-finalproject", "Github.")),
                           
                           br()
                           
@@ -223,6 +226,7 @@ server <- function(input, output) {
   # First plot.
   # Simple ggplot.
   # Subset the data to just include the cities selected in the pickerInput using a filter funciton.
+  # Use plotly to make it interactive
   
   output$plot1 <- renderPlotly({
     
@@ -248,8 +252,6 @@ server <- function(input, output) {
   # Model
   # Used render_gt() so my gt table shows up.
   # Again, subset the data to just include the cities selected.
-  
-  
     
   output$model <- render_gt({
       
@@ -294,7 +296,10 @@ server <- function(input, output) {
       
     })
 
-  
+  # Plot for the county level median price graph.
+  # GGPlot using geom_point and geom_smooth.
+  # Colored the points by county.
+  # Lowered the alpha of the geom_points to make it easier to visualize overlap.
   
   output$plot4 <- renderPlot ({
     plot4 <- counties_data %>%
@@ -313,6 +318,11 @@ server <- function(input, output) {
       )
     plot4
   })
+  
+  # County level permit data plot
+  # GGPlot using geom_point(), geom_line().
+  # Colored each county differently.
+  # Set the size of the points equal to the population of the county.
   
   output$plot3 <- renderPlot ({
     plot3 <- counties_data %>%
@@ -333,6 +343,38 @@ server <- function(input, output) {
     plot3
   })
   
+  # Regression output.
+  # RenderUI. Looked online to figure out how to do it.
+  # Used stargazer to make the display.
+  
+  output$lm1 <- renderUI({
+    
+    # Standard multivariate linear regression using lm.
+    
+    reg_permits1 <- lm(diff ~ total + pop + year + name, data = counties_data)
+    
+    # Print the regression output using stargazer.
+    
+    reg <- stargazer(reg_permits1,
+                     title = "OLS Regression: Determinants of Changing House Prices",
+                     type = "html",
+                     covariate.labels = c(
+                       "Permits",
+                       "Population",
+                       "Year",
+                       "Columbia County",
+                       "Multnomah County",
+                       "Washington County",
+                       "Yamhill County"
+                     ))
+    
+    HTML(reg)
+  })
+  
+   # Animated plot.
+   # Mimicked what we had done on a previous problem set to display the plot.
+   # Saved it as a gif and then used list() to display it.
+  
    output$animation <- renderImage({
     animation <- read_rds("animated_map.rds")
     
@@ -343,7 +385,9 @@ server <- function(input, output) {
   }, deleteFile = FALSE)
   
   # Second plot
-  # Basically the same as above.
+  # Basically the same as the GGPlot from the national data.
+  # Subset the data to just include the neighborhoods selected in the pickerInput.
+  # Use GGPlot to display the change in median house price over time.
   
   output$plot2 <- renderPlot({
     
@@ -366,32 +410,6 @@ server <- function(input, output) {
       )
   })
   
-  output$plot5 <- renderPlot ({
-    permitsOR_county %>%
-      filter(year == 2010) %>%
-      ggplot(aes(x = median, y = diff)) +
-        geom_point() +
-        geom_smooth(method = "lm")
-  })
-  
-  output$lm1 <- renderUI({
-    reg_permits1 <- lm(diff ~ total + pop + year + name, data = counties_data)
-    
-    reg <- stargazer(reg_permits1,
-                     title = "OLS Regression: Determinants of Changing House Prices",
-                     type = "html",
-                     covariate.labels = c(
-                       "Permits",
-                       "Population",
-                       "Year",
-                       "Columbia County",
-                       "Multnomah County",
-                       "Washington County",
-                       "Yamhill County"
-                     ))
-    
-    HTML(reg)
-    })
 }
 
 # Run the application 

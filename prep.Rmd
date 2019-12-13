@@ -50,7 +50,10 @@ write_csv(zillow_data_cities, "Final-Project/cities.csv")
 
 ```{r Oregon model}
 
-# median home price data
+# Median home price data at the county level.
+# Filter to just get the counties in Portland.
+# Make the data long.
+# Create the diff variable that captures the change in house price by year.
 
 zillow_data_counties <- read_csv("data/County_Zhvi_SingleFamilyResidence.csv",
                                  col_types = cols(
@@ -80,6 +83,11 @@ zillowOR <- zillow_data_counties %>%
   filter(id %in% c("005", "009", "051", "067", "071"))
 
 # Permits data set
+# Clean the dataset.
+# Rename variables.
+# Create total variable which is the sum of all the different permit 
+# classifications.
+# Use gather to make the data long.
 
 permitsMetro <- read_csv("data/BuildingPermitsPortlandMetro.csv", 
                          col_types = cols(
@@ -100,38 +108,42 @@ permitsMetro <- read_csv("data/BuildingPermitsPortlandMetro.csv",
   mutate(name = paste(Location, "Oregon", sep = ", ")) %>%
   select(-Location)
 
-# Population data
+# Population data at the county level
 # 2010-2018
 
-oregon_county_pop <- read_csv("data/oregon_county_pop.csv", col_types = cols(
-  GEO.id = col_character(),
-  GEO.id2 = col_double(),
-  `GEO.display-label` = col_character(),
-  rescen42010 = col_double(),
-  resbase42010 = col_double(),
-  respop72010 = col_double(),
-  respop72011 = col_double(),
-  respop72012 = col_double(),
-  respop72013 = col_double(),
-  respop72014 = col_double(),
-  respop72015 = col_double(),
-  respop72016 = col_double(),
-  respop72017 = col_double(),
-  respop72018 = col_double()
-)) %>%
+oregon_county_pop <- read_csv("data/oregon_county_pop.csv", 
+                              col_types = cols(
+                                GEO.id = col_character(),
+                                GEO.id2 = col_double(),
+                                `GEO.display-label` = col_character(),
+                                rescen42010 = col_double(),
+                                resbase42010 = col_double(),
+                                respop72010 = col_double(),
+                                respop72011 = col_double(),
+                                respop72012 = col_double(),
+                                respop72013 = col_double(),
+                                respop72014 = col_double(),
+                                respop72015 = col_double(),
+                                respop72016 = col_double(),
+                                respop72017 = col_double(),
+                                respop72018 = col_double()
+                              )) %>%
   select(-GEO.id, -rescen42010, -resbase42010) 
 
 # Rename columns
 
 names(oregon_county_pop) <- c("id", "name", "2010", "2011", "2012", "2013", "2014", "2015", "2016", "2017", "2018")
 
-# 2000 - 2009
+# Population data from 2000 - 2009
+# Clean the data to just get the columns I want.
+# Filter to just include the counties in Portland.
 
-oregon_county_pop_2000 <- read_csv("data/counties_2000_2009.csv", col_types = cols(
-  .default = col_double(),
-  STNAME = col_character(),
-  CTYNAME = col_character()
-)) %>%
+oregon_county_pop_2000 <- read_csv("data/counties_2000_2009.csv", 
+                                   col_types = cols(
+                                                    .default = col_double(),
+                                                    STNAME = col_character(),
+                                                    CTYNAME = col_character()
+                                                  )) %>%
   clean_names() %>%
   filter(stname == "Oregon" & str_detect(ctyname, "County")) %>%
   mutate(name = paste(ctyname, "Oregon", sep = ", ")) %>%
@@ -146,10 +158,14 @@ names(oregon_county_pop_2000) <- c("2000", "2001", "2002", "2003", "2004", "2005
 oregon_county_pop <- oregon_county_pop %>%
   merge(oregon_county_pop_2000, by = "name")
 
-# For some reason it wasn't working to have it all as one piped function so I separated them out
+# For some reason it wasn't working to have it all as one piped function so I
+# separated them out to turn the wide data long with gather.
 
 oregon_county_pop <- oregon_county_pop %>%
   gather(year, pop, 3:21)
+
+# Merge everything into one dataset.
+# House price data, permit data, combined population data
 
 counties <- oregon_county_pop %>%
   mutate(id = str_remove(as.character(id), "41")) %>%
@@ -157,6 +173,8 @@ counties <- oregon_county_pop %>%
   merge(permitsMetro, by = c("name", "year")) %>%
   merge(zillowOR, by = c("id", "year")) %>%
   arrange(year)
+
+# Write the unified dataset as a csv and save it to the shiny app folder.
 
 write_csv(counties, "Final-Project/counties.csv")  
 ```
@@ -190,6 +208,12 @@ write_csv(zillow_data_neighborhoods, "Final-Project/neighborhoods.csv")
 
 
 ```{r Portland animated}
+
+# Create the animated plot using the neighborhoods data.
+# Standard ggplot.
+# Use transition_time() to animate.
+# Save plot as a rds file to the shiny app folder.
+
 animatedPlot <- zillow_data_neighborhoods %>%
        group_by(RegionName) %>%
        ggplot(aes(x = date, y = median, group = RegionName, color = RegionName)) +
