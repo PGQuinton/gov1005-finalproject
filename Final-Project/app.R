@@ -29,6 +29,7 @@ library(gganimate)
 library(png)
 library(ggthemes)
 library(stargazer)
+library(vembedr)
 library(tidyverse)
 
 # Read in the cities data.
@@ -197,9 +198,14 @@ ui <- navbarPage("United States Housing Market", theme = shinytheme("sandstone")
                  ),
                  
                  # About panel.
+                 # Used embed_youtube() from the vembedr package to display my video on the shiny app.
                  
                  tabPanel("About",
                           titlePanel("About"),
+                          
+                          br(),
+                          
+                          embed_youtube("fIYCNWYuyZo", width = 500, height = 280, allowfullscreen = TRUE),
                           
                           br(),
                           

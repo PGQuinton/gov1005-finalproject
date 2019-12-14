@@ -9,7 +9,12 @@ subtitle: An Analysis of the Housing Market in Portland, Oregon
 ---
 
 ```{r setup, include=FALSE}
+
+# Set results equal to asis in order to print the stargazer output
+
 knitr::opts_chunk$set(echo = FALSE, results = 'asis')
+
+# Load in necesary libraries
 
 library(broom)
 library(gt)
@@ -28,7 +33,11 @@ Before narrowing the scope of the analysis to just Portland, Oregon, I thought i
 
 
 ```{r}
+# Since the data isn't saved in the www folder, I need to change the working directory
+
 setwd(dir = "/Users/PGQuinton/Documents/Harvard 2019-2020/Gov 1005/gov1005-finalproject/Final-Project")
+
+# Read in the national metro level data.
 
 national_data <- read_csv("cities.csv",
                           col_types = cols(
@@ -41,7 +50,11 @@ national_data <- read_csv("cities.csv",
                           Price = col_double()
                          ))
 
+# Run the model of price and population, same as in the shiny app
+
 model <- tidy(lm(price ~ rowname, data = national_data), conf.int = TRUE, conf.level = .90)
+
+# Display the model in a gt table
 
 model %>%
         select(term, estimate, conf.low, conf.high) %>%
@@ -76,10 +89,16 @@ The regression output displays the effect of an increase in population ranking o
 
 The bulk of the project centered around the housing market in Portland, Oregon. In analyzing the market, I utilized county level data from Zillow, the Department of Housing and Urban Development, and the Census Bureau. The counties included in the analysis are the five counties in Oregon that fall within the boundaries of the Portland metropolitan area. 
 
-In examining the housing market, I focused on median single-family home prices, buidling permit issuances, and population. I ran a multi-variate linear regression with the annual change in home price as the independent variable and population and total building permit issued that year as the dependent variables. I also controlled for year and county effects. The results of the regression are below.
+In examining the housing market, I focused on median single-family home prices, buidling permit issuances, and population. Initially, I analyzed the change in building permit rates over time broken down by county. The below plot shows that the number of building permits issued each year decreased sharply following the housing market crash of 2008 before beginning to rebound roughly four years later. This depression in the number of building permits issued was more pronounced in the more populated counties. Furthermore, the number of building permits issued has decreased in the past year. However, there is not enough data to know whether that is a temporary change or a larger trend.
+
 
 ```{r}
+
+# Again changed the working directory to the shiny folder with the data in it.
+
 setwd(dir = "/Users/PGQuinton/Documents/Harvard 2019-2020/Gov 1005/gov1005-finalproject/Final-Project")
+
+# Read in the Portland counties data.
 
 port_data <- read_csv("counties.csv",
                       col_types = cols(
@@ -92,7 +111,35 @@ port_data <- read_csv("counties.csv",
                       diff = col_double()
                       ))
 
+# Pipe the Portland county data into a ggplot to display the change in building permit totals over time.
+
+port_data %>%
+  ggplot(aes(x = year, y = total, color = name)) + 
+          geom_point(aes(size = pop)) +
+          geom_line() +
+          labs(title = "Change in Number of Housing Permits Issued Each Year by County",
+             subtitle = "County level data from 2001 to 2019 - Portland, Oregon.",
+             y = "Number of Permits Issued",
+             x = "Year",
+             caption = "Data Sources: US Census Bureau, Department of Housing and Urban Development, & Zillow",
+             color = "County",
+             size = "Population"
+             ) +
+          theme(
+            plot.caption = element_text(hjust = 0)
+          )
+```
+
+Subsequently, I ran a multi-variate linear regression with the annual change in home price as the independent variable and population and total building permit issued that year as the dependent variables. I also controlled for year and county effects. The results of the regression are on the following page.
+
+```{r}
+
+# Run the multivariate regression.
+
 reg_permits <- lm(diff ~ total + pop + year + name, data = port_data)
+
+# Use stargazer to display the regression output.
+# Set header equal to false to remove the output giving credit to the creator of the package.
 
 stargazer(reg_permits,
                      title = "OLS Regression: Determinants of Changing House Prices",
@@ -111,27 +158,13 @@ stargazer(reg_permits,
 
 ```
 
+
 The main takeaway from the regression is that the number of building permits issued each has a statistically significant efffect on the change in home price while population did not. For each additional building permit issued, home prices are expected to increase by $12.668. This effect is statistically significant at the 1% level. Population is not statistically significant which is surprising considering the results of the regression at the national level. Furthermore, the year coefficient was statistically significant at the 5% level. Each year, the annual change in housing prices is expected to increase by $1,331.030. This expected increase can most likely be explained by inflation in housing valuations.
 
-Additionally, I analyzed the change in building permit rates over time broken down by county. The below plot shows that the number of building permits issued each year decreased following the housing market crash of 2008 before beginning to rebound roughly four years later. This depression in the number of building permits issued was more pronounced in the more populated counties. 
+##Conclusion
 
-```{r}
-setwd(dir = "/Users/PGQuinton/Documents/Harvard 2019-2020/Gov 1005/gov1005-finalproject/Final-Project")
+After analyzing the data, it is apparent that in Portland building permits and median house prices appear to move in conjunction with one another. Both metrics dropped severely following the housing market crash and recession of 2008. Following a several year dip, both a begun to rebound ultimately surpassing the pre-2008 highs. 
 
-port_data %>%
-  ggplot(aes(x = year, y = total, color = name)) + 
-          geom_point(aes(size = pop)) +
-          geom_line() +
-          labs(title = "Change in Number of Housing Permits Issued Each Year by County",
-             subtitle = "County level data from 2001 to 2019 - Portland, Oregon.",
-             y = "Number of Permits Issued",
-             x = "Year",
-             caption = "Data Sources: US Census Bureau, Department of Housing and Urban Development, & Zillow",
-             color = "County",
-             size = "Population"
-             ) +
-          theme(
-            plot.caption = element_text(hjust = 0)
-          )
-```
+
+
 
